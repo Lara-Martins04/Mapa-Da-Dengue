@@ -68,15 +68,18 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+    "react": "https://esm.sh/react@^19.2.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0"
   }
 }
 </script>
 </head>
 <body class="min-h-screen bg-brand-bg font-sans text-gray-800 flex flex-col overflow-x-hidden">
+
+    <!-- Input Oculto para Upload de Fotos -->
+    <input type="file" id="image-upload-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
 
     <!-- Navegação -->
     <nav class="bg-white shadow-sm sticky top-0 z-40 border-b border-gray-100">
@@ -170,7 +173,7 @@
         <div id="view-lifecycle" class="view-section hidden animate-fade-in space-y-8 py-8">
             <div class="text-center">
                 <h2 class="text-3xl font-extrabold text-brand-blue mb-4">Ciclo de Vida do Aedes</h2>
-                <p className="text-gray-600 max-w-2xl mx-auto px-4">
+                <p class="text-gray-600 max-w-2xl mx-auto px-4">
                   O mosquito se desenvolve muito rápido! Em dias quentes, de ovo a adulto pode levar menos de 10 dias.
                 </p>
             </div>
@@ -202,9 +205,8 @@
               <p class="text-xs md:text-sm text-gray-500">Ciências • 6º Ano • Ensino Fundamental</p>
             </div>
             <div class="text-xs md:text-sm text-gray-400">
-              <p>© 2026 Educação em Saúde.</p>
+              <p>© 2024 Educação em Saúde.</p>
               <p>Juntos contra o Aedes aegypti!</p>
-              <p>Direitos reservados a UNIRIO</p>
             </div>
           </div>
         </div>
@@ -303,14 +305,28 @@
 
     <!-- Lógica da Aplicação -->
     <script>
-        // --- DADOS (Constants) ---
-        // Com as alterações solicitadas (Vegetação fora da rua, Terreno movido, Pneu ajustado)
+        // --- ESTADO GLOBAL ---
+        let activeBuildingId = null;
         
+        // --- PERSISTÊNCIA (Carregar do LocalStorage) ---
+        let REPO_IMAGES = {};
+        
+        try {
+            const savedImages = localStorage.getItem('patrulha_dengue_images');
+            if (savedImages) {
+                REPO_IMAGES = JSON.parse(savedImages);
+            }
+        } catch (e) {
+            console.warn("Não foi possível carregar imagens salvas.");
+            REPO_IMAGES = {};
+        }
+
+        // --- DADOS (Constants) ---
         const HOTSPOTS = [
           {
             id: 'pneu',
             x: 88,
-            y: 38, // Movido conforme solicitado
+            y: 38,
             label: 'Pneu Velho',
             locationType: 'Terreno Baldio',
             riskDescription: 'Pneus acumulam muita água da chuva e são escuros, o ambiente perfeito para o mosquito se esconder e botar ovos.',
@@ -371,7 +387,7 @@
             x: 10,
             y: 15,
             width: 25,
-            imageUrl: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhJCGD6uFwttkL664IMj5QMi4OPK8Db5VLEPt009XBO-6EZYVpC1HeyMAFoFbQFhdR_k5LldKideoq_1hYG3foBd8yE72wrvlXm2Vw1g8CJ9srnHEko9k3nG_c4pgYi2oE/s220/DSC04772.JPG',
+            imageUrl: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=600&auto=format&fit=crop',
             type: 'school',
             description: 'Local de aprendizado. Importante manter calhas e bebedouros limpos.'
           },
@@ -379,9 +395,9 @@
             id: 'lot',
             name: 'Terreno Baldio',
             x: 70,
-            y: 22, // Movido para baixo conforme solicitado
+            y: 22,
             width: 25,
-            imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ32GlPdSI89oUqVhBGttPeQxKwEMwLfibn_A&s',
+            imageUrl: 'https://images.unsplash.com/photo-1534959146522-6b9900a501e4?q=80&w=600&auto=format&fit=crop',
             type: 'lot',
             description: 'Área com vegetação alta e risco de descarte irregular de lixo.'
           },
@@ -391,27 +407,33 @@
             x: 45,
             y: 40,
             width: 22,
-            imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRbwce34lQps0mNi2K37Y4Ou0171H1GsEc96Q&s',
+            imageUrl: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?q=80&w=600&auto=format&fit=crop',
             type: 'house',
             description: 'Casa de família. Atenção redobrada com caixas d\'água e vasos de plantas.'
           }
         ];
 
+        // Inicializar armazenamento em memória caso não exista no storage
+        BUILDINGS.forEach(b => {
+            if (!REPO_IMAGES[b.id]) {
+                REPO_IMAGES[b.id] = [];
+            }
+        });
+
         const DECORATIONS = [
           // Fundo Esquerdo
-          { id: 'tree_left_1', x: 2, y: 55, width: 8, imageUrl: 'https://static.vecteezy.com/system/resources/previews/017/219/856/non_2x/isolated-tree-high-res-free-png.png', zIndex: 20 },
-          { id: 'bush_left_1', x: 8, y: 60, width: 5, imageUrl: 'https://png.pngtree.com/png-clipart/20221207/ourmid/pngtree-bush-tree-png-image_6515109.png', zIndex: 25 },
+          { id: 'tree_left_1', x: 2, y: 55, width: 8, imageUrl: 'https://images.unsplash.com/photo-1542279588-37f223d6a999?q=80&w=250&auto=format&fit=crop', zIndex: 20 },
+          { id: 'bush_left_1', x: 8, y: 60, width: 5, imageUrl: 'https://images.unsplash.com/photo-1616239129940-2e06173a14a9?q=80&w=200&auto=format&fit=crop', zIndex: 25 },
           
           // Próximo à Escola (Esquerda)
-          { id: 'tree_school', x: 25, y: 58, width: 7, imageUrl: 'https://png.pngtree.com/png-clipart/20221207/ourmid/pngtree-bush-tree-png-image_6515109.png', zIndex: 20 },
+          { id: 'tree_school', x: 25, y: 58, width: 7, imageUrl: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?q=80&w=250&auto=format&fit=crop', zIndex: 20 },
           
-          // Centro (Perto da Casa)
-          { id: 'bush_center_1', x: 42, y: 60, width: 4, imageUrl: https://png.pngtree.com/png-clipart/20221207/ourmid/pngtree-bush-tree-png-image_6515109.png', zIndex: 26 },
-          { id: 'tree_center', x: 55, y: 58, width: 9, imageUrl: 'https://static.vecteezy.com/system/resources/previews/017/219/856/non_2x/isolated-tree-high-res-free-png.png', zIndex: 18 },
+          // Centro (Arbusto central removido conforme solicitado anteriormente)
+          { id: 'tree_center', x: 55, y: 58, width: 9, imageUrl: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?q=80&w=250&auto=format&fit=crop', zIndex: 18 },
 
-          // Direita (Perto do Terreno Baldio - Vegetação reduzida para não invadir rua)
-          { id: 'bush_right_1', x: 75, y: 62, width: 6, imageUrl: 'https://static.vecteezy.com/system/resources/previews/017/219/856/non_2x/isolated-tree-high-res-free-png.png', zIndex: 25 },
-          { id: 'tree_right_1', x: 88, y: 50, width: 10, imageUrl: 'https://png.pngtree.com/png-clipart/20221207/ourmid/pngtree-bush-tree-png-image_6515109.png', zIndex: 20 },
+          // Direita (Perto do Terreno Baldio)
+          { id: 'bush_right_1', x: 75, y: 62, width: 6, imageUrl: 'https://images.unsplash.com/photo-1500320821405-8fc1732209ca?q=80&w=200&auto=format&fit=crop', zIndex: 25 },
+          { id: 'tree_right_1', x: 88, y: 50, width: 10, imageUrl: 'https://images.unsplash.com/photo-1458966480358-a0ac42de0a7a?q=80&w=250&auto=format&fit=crop', zIndex: 20 },
         ];
 
         // --- RENDERIZAÇÃO ---
@@ -564,11 +586,58 @@
             setTimeout(() => lucide.createIcons(), 50);
         }
 
+        // --- UPLOAD LOGIC ---
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file || !activeBuildingId) return;
+
+            // Limite de segurança simples (2MB) para não lotar o LocalStorage imediatamente
+            if (file.size > 2 * 1024 * 1024) {
+                alert("A imagem é muito grande! Por favor escolha uma imagem menor que 2MB.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    // Salvar a imagem no objeto global
+                    REPO_IMAGES[activeBuildingId].push(e.target.result);
+                    
+                    // PERSISTÊNCIA: Salvar no LocalStorage
+                    localStorage.setItem('patrulha_dengue_images', JSON.stringify(REPO_IMAGES));
+
+                    // Atualizar o modal aberto
+                    openRepoModal(activeBuildingId);
+                } catch (err) {
+                    // LocalStorage tem limite (geralmente 5MB). Se encher, avisa o usuário.
+                    alert("Espaço de armazenamento cheio! Exclua algumas fotos antigas para adicionar novas.");
+                    // Remove do array local para manter consistência
+                    REPO_IMAGES[activeBuildingId].pop();
+                }
+            };
+            reader.readAsDataURL(file);
+            
+            // Limpar o input para permitir selecionar a mesma foto novamente se quiser
+            event.target.value = '';
+        }
+
+        function deleteImage(index) {
+            if (!activeBuildingId) return;
+            
+            if(confirm("Tem certeza que deseja excluir esta foto?")) {
+                REPO_IMAGES[activeBuildingId].splice(index, 1);
+                localStorage.setItem('patrulha_dengue_images', JSON.stringify(REPO_IMAGES));
+                openRepoModal(activeBuildingId);
+            }
+        }
+
         // --- MODAIS ---
 
         function closeModals() {
             document.getElementById('modal-info').classList.add('hidden');
             document.getElementById('modal-repo').classList.add('hidden');
+            activeBuildingId = null;
         }
 
         function openInfoModal(hotspotId) {
@@ -596,32 +665,36 @@
             const building = BUILDINGS.find(b => b.id === buildingId);
             if (!building) return;
 
+            activeBuildingId = buildingId;
+
             document.getElementById('modal-repo-subtitle').innerText = building.name;
             document.getElementById('modal-repo-desc').innerText = building.description;
 
-            const mockImages = [
-                `https://picsum.photos/seed/${building.id}1/300/200`,
-                `https://picsum.photos/seed/${building.id}2/300/200`,
-                `https://picsum.photos/seed/${building.id}3/300/200`,
-            ];
+            // Recupera as imagens salvas para este prédio
+            const images = REPO_IMAGES[buildingId] || [];
 
             const grid = document.getElementById('modal-repo-grid');
             
             // Botão Upload
             let html = `
-                <div class="aspect-video border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-brand-blue hover:text-brand-blue hover:bg-blue-50 transition-all cursor-pointer group">
+                <div onclick="document.getElementById('image-upload-input').click()" 
+                     class="aspect-video border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-brand-blue hover:text-brand-blue hover:bg-blue-50 transition-all cursor-pointer group">
                     <i data-lucide="upload" class="w-8 h-8 mb-2 group-hover:scale-110 transition-transform"></i>
                     <span class="font-bold text-sm">Adicionar Foto</span>
                 </div>
             `;
 
-            // Imagens
-            mockImages.forEach((src, idx) => {
+            // Imagens Carregadas
+            images.forEach((src, idx) => {
                 html += `
-                    <div class="group relative aspect-video rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all">
-                        <img src="${src}" alt="Galeria" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                            <span class="text-white font-bold bg-black/50 px-3 py-1 rounded-full text-sm backdrop-blur-sm">Visualizar</span>
+                    <div class="group relative aspect-video rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all animate-fade-in">
+                        <img src="${src}" alt="Foto ${idx}" class="w-full h-full object-cover" />
+                        
+                        <!-- Overlay com botão visualizar -->
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 gap-2">
+                             <button onclick="deleteImage(${idx})" class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition-colors shadow-lg" title="Excluir">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                             </button>
                         </div>
                     </div>
                 `;
